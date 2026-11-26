@@ -19,6 +19,7 @@ package org.apache.servicecomb.core.provider.consumer;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.servicecomb.core.SCBEngine;
 import org.apache.servicecomb.core.SCBEngine.CreateMicroserviceMetaEvent;
@@ -40,6 +41,8 @@ public class ReferenceConfigManager {
   private final Map<String, Map<String, MicroserviceReferenceConfig>> referenceConfigs = new ConcurrentHashMapEx<>();
 
   private final Map<String, Map<String, Object>> referenceConfigsLocks = new ConcurrentHashMapEx<>();
+
+  private final AtomicBoolean chainRefreshRegistered = new AtomicBoolean();
 
   private OpenAPIRegistryManager openAPIRegistryManager;
 
@@ -133,6 +136,8 @@ public class ReferenceConfigManager {
 
   private MicroserviceReferenceConfig buildMicroserviceReferenceConfig(SCBEngine engine,
       String application, String microserviceName) {
+    registerChainRefreshListener(engine);
+
     ConsumerMicroserviceVersionsMeta microserviceVersionsMeta = new ConsumerMicroserviceVersionsMeta(engine);
     MicroserviceMeta microserviceMeta = new MicroserviceMeta(engine, application, microserviceName, true);
     microserviceMeta.setConsumerFilterChain(engine.getFilterChainsManager()
@@ -156,5 +161,27 @@ public class ReferenceConfigManager {
     EventManager.getEventBus().post(new CreateMicroserviceMetaEvent(microserviceMeta));
     return new MicroserviceReferenceConfig(application,
         microserviceName, microserviceMeta);
+  }
+
+  // when filter related configuration changes, re-resolve the consumer/edge chains
+  // of every already created MicroserviceMeta and push the new chains back, so that
+  // the invocation hot path keeps being a single volatile field read
+  private void registerChainRefreshListener(SCBEngine engine) {
+    if (!chainRefreshRegistered.compareAndSet(false, true)) {
+      return;
+    }
+    engine.getFilterChainsManager().addChainRefreshListener(() -> refreshFilterChains(engine));
+  }
+
+  private void refreshFilterChains(SCBEngine engine) {
+    for (Map<String, MicroserviceReferenceConfig> appConfigs : referenceConfigs.values()) {
+      for (MicroserviceReferenceConfig config : appConfigs.values()) {
+        MicroserviceMeta microserviceMeta = config.getMicroserviceMeta();
+        microserviceMeta.setConsumerFilterChain(engine.getFilterChainsManager()
+            .findConsumerChain(microserviceMeta.getAppId(), microserviceMeta.getMicroserviceName()));
+        microserviceMeta.setEdgeFilterChain(engine.getFilterChainsManager()
+            .findEdgeChain(microserviceMeta.getAppId(), microserviceMeta.getMicroserviceName()));
+      }
+    }
   }
 }

@@ -44,11 +44,13 @@ public class MicroserviceMeta {
   // Used to indicate configuration items type. EDGE & CONSUMER chain are all consumer.
   private final boolean consumer;
 
-  private FilterNode consumerFilterChain = FilterNode.EMPTY;
+  // chains are replaced as a whole when filter related configuration changes,
+  // volatile guarantees invokers on other threads see the new chain
+  private volatile FilterNode consumerFilterChain = FilterNode.EMPTY;
 
-  private FilterNode providerFilterChain = FilterNode.EMPTY;
+  private volatile FilterNode providerFilterChain = FilterNode.EMPTY;
 
-  private FilterNode edgeFilterChain = FilterNode.EMPTY;
+  private volatile FilterNode edgeFilterChain = FilterNode.EMPTY;
 
   private final VendorExtensions vendorExtensions = new VendorExtensions();
 

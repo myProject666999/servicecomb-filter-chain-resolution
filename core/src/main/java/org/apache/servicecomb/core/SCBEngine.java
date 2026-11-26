@@ -384,6 +384,10 @@ public class SCBEngine {
     producerMicroserviceMeta.setProviderFilterChain(filterChainsManager.findProducerChain(
         BootStrapProperties.readApplication(environment), microserviceName));
     producerMicroserviceMeta.setMicroserviceVersionsMeta(new MicroserviceVersionsMeta(this));
+
+    // re-resolve and push the producer chain when filter related configuration changes
+    filterChainsManager.addChainRefreshListener(() -> producerMicroserviceMeta.setProviderFilterChain(
+        filterChainsManager.findProducerChain(BootStrapProperties.readApplication(environment), microserviceName)));
   }
 
   /**
@@ -427,6 +431,12 @@ public class SCBEngine {
     // only be null for some test cases
     if (priorityPropertyManager != null) {
       priorityPropertyManager.close();
+    }
+
+    //Step 5.1: stop listening to configuration change events
+    // only be null for some test cases
+    if (filterChainsManager != null) {
+      filterChainsManager.destroy();
     }
 
     //Step 6: Stop vertx to prevent blocking exit

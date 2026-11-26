@@ -60,8 +60,25 @@ public interface Filter extends Ordered {
     return true;
   }
 
+  /**
+   * <pre>
+   * resolve the order for a target microservice.
+   *
+   * NOTE: the default implementation delegates to {@link #getOrder()}.
+   *   historically this default returned {@code 0}, so a custom filter that implements
+   *   {@code ConsumerFilter}/{@code ProviderFilter}/{@code EdgeFilter} directly
+   *   (without extending {@link AbstractFilter}) was always sorted as order {@code 0}
+   *   during per-microservice chain resolution, even when its {@link #getOrder()}
+   *   returned another value. such filters now take their {@link #getOrder()} position
+   *   in the resolved chain, which may change the execution order of existing
+   *   deployments that rely on the old behavior.
+   *   filters extending {@link AbstractFilter} are not affected: {@link AbstractFilter}
+   *   already overrides this method to honor
+   *   {@code servicecomb.filter.<name>.<application>.<service>.order}.
+   * </pre>
+   */
   default int getOrder(String application, String serviceName) {
-    return 0;
+    return getOrder();
   }
 
   default int getOrder() {
